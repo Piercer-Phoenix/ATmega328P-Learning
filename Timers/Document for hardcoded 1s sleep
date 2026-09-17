@@ -1,0 +1,44 @@
+Explanation of the code, and the general flow of the code:
+
+1) The first section is for macro statements, for defining variable names to directly write to the registers without using any dereferencing operations in the main code. This entire code is written around timer0 module.
+
+
+2) Now, we will be using CTC mode, and for this code, CTC mode is used because it is more useful to calculate times with less residuals. 
+
+I used the OCR0A register, while using the timer0 module 
+This code only uses a polling mechanism / busy wait loop for reading the OCF0A flag, once it is detected to be set, we make it zero by writing a logical one , as specified by the datasheet.
+
+3) A prescaler of 1024 is used, set by setting the CS02:00 bits to 1-0-1, since the master clock for the Arduino UNO board, is the crystal oscillator on chip, generating a 16mhz signal, each incremental tick going to the tcnt0 is for 64  microseconds.
+
+The exact math: 
+
+Prescaler = 1024
+master clock frequency = 16mhz
+ocr0a value is set to 250, for this code. so for every one ocf0a, 16 milliseconds(64 microseconds * 250) have passed.
+
+So, if we divide 1000 ms(1s = 1000ms) by 16 milliseconds, we get 62.5,which means we have to read the OCF0A flag 62 times. 
+
+I am not dealing with the slight error im getting, because if i only count 62 I'll be observing a delay of 992 ms, and if I do 63 reads, i'll be seeing 1008ms.
+
+
+4) The WGM bits are set first, the tcnt0 register is cleared, and the ocr0a register is set to 250, variables status and count are initialized, and the entire rest of the function, sleepself() is just polling the ocf0a flag and then writing a logical one to it to clear it and incrementing count variable, this process only ends once the count variable reached 63. (less than or equal to condition) which means the loop runs for 63 times, making the delay for over 1 second. Precisely speaking 1008ms. (ms = milliseconds)
+
+
+
+
+Bugs I've encountered and mistakes I've done:
+
+
+1) I Counted the number of ticks for just ONE overflow and didn't poll TOV0 just counted the ticks for ONE overflow cycle, I only counted 250 ticks, I did this because I counted each incremental tick to be 16 microseconds and went till 250 for a 4 second delay. It's stupid, very stupid, in hindsight, but I've recognized the mistakes in my math, and fixed it. Here i mistook 16 microseconds to be 16 milliseconds and thought the register running from 0->250 will be a 4 second delay. My entire understanding of the math at the beginning point of time was very skewed to say the least. 
+
+2) A mistake I've done is Setting the CS bits to 1 1 1(binary), which read me the value for tcnt0 as 0, because the timer0 module was being clocked by an external clock source, but there was no external source in my case, so the timer0/tcnt0 never got incremented. 
+
+3) For a way to understand even if the timer was being incremented or not, and i saw the values going up very fast which, after sometime, made me realize, the values sometimes miss, this was when I was polling tcnt0 if itwas above 250, the code was to stop the loop.
+
+This had a MAJOR problem, as software limitations start to kick in, you see, even if u were checking if the value of tcnt0 was above 250, the actual operation was done on variables inside the program, not hardware enforced. This means, sometimes you'd miss the values, as the timer is incrementing way too fast.
+
+That is why, using CTC mode for cases like this, is way more reliable, as the comparison is done for each cycle, and it is ensured that there is "slipping". 
+
+4) Using a wrong address for tifr0 register in my program, This happened thanks to me not paying much attention to the address of the tifr0 register properly and see which numerical notation was being talked about. 
+
+5) Setting wrong WGM bits, specifically, the WGM02 bit while trying to enable the CTC mode , which was supposed to be 0-1-0(mode 2), but I once set the wgm02 bit to 1. 
