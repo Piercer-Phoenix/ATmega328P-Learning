@@ -1,0 +1,46 @@
+doc for parameterized function of timers. 
+
+
+explaination of the code:
+1) This code will be using the timer2 module to generate a delay
+
+2) I've used a prescaler of 1024, in the CTC mode, with using the ocr2a register for this specific program. This program uses a polling mechanism/ busy-wait loop to read the ofc2a flaf.
+
+3) The math:
+prescaler =1024, ocr2a (top): 250,
+
+That means, each tick will be for 64 microseconds, which means if the ocf2a flag is set, 16 milliseconds have passed each time the ocf2a flag is set to 1. 
+
+The parameter passed to the function(n) will be divided by 16, and the whole number of the resulting number is stored and the loop will count down from (n/16) to 0, which means, the loop will run on the condition of "overflows > 0" which fixes off-by-one errors.  
+
+
+4) The loop counts from "overflows" to the loop condition and the OCF2A flag is polled and the overflows is decremented, if OCF2A is set and it is reset to 0 by writing a logical one to the OCF2A bit. 
+
+
+
+
+Bugs I've come across:
+
+
+1)The single most impactful bug I've encountered when trying to write this particular function which was parameterized, was when I was attempting to deal with the precision of the sleep function. 
+
+When using the above math, there is a 16 ms precision error. I attempted to deal it with the inaccuracy using a logic where I would divide the number milliseconds(the parameter of the function, 'n') using modular division:
+
+by doing: int y = n % 16
+int x = (y /16) * 250
+
+which is implicitly wrong because anything % 16 gives us an output of 0-15, and when diving that with 16, it will result in zero(because the numbers are stored in integers), which effectively makes my logic in the code ineffective and is basically a dead code. 
+
+
+I've removed all the residua logic and only kept the parameterized function part and I've not made any revisions to make the code perfectly accurate.
+
+
+2) Fixed the way i used to set the GPIO registers in the last code, by only manipulating that specific bit with which i am concerned, it wasn't a problem in the last code but this is a generally more hygienic practice to follow.
+
+
+
+3) It isn't really a BUG, just something I wanted to talk about but, the lines where i disable the timer by clearing the CS bits or writing to PRTIM2 bit of PRR register isn't really required, but it is a hygienic practice. 
+
+
+
+4) Another big "MAKE A NOTE" for this code is that there will always be an inaccuracy, but under the range of 16ms.
