@@ -1,0 +1,71 @@
+Explanation of fast PWM: 
+
+It is one of the 2 PWM mods Atmega328P offers, in this mode of PWM, the tcnt0 goes from 0 to 0xFF(or OCR0A, based on the wave generation mode selected), for each cycle, the tcnt0 is compared to OCR0x and the corresponding output compare pin is set to high or low. 
+
+In non inverting mode, the output compare pin (OC0x), when the tcnt0 is at BOTTOM(0x00), a rising edge is triggered and it stays like that till there is a compare match between tcnt0 and the OCR0x, which causes a falling edge, and it stays like that for the rest of the period, that is, from OCR0x -> 255. And when the tcnt0 wraps back down to 0, a rising edge is triggered, making the pin high, and this continues.  So the duty cycle(the time for which a signal is HIGH in a period) for inverting non mode will be: (OCR0x value / 256) * 100.		(256 since we also wrap back around from 255 to 0). 
+
+
+In inverting mode, the output compare pin sees a falling edge when the tcnt0 is at bottom, and there is a rising edge when there is a compare match between 
+OCR0x and TCNT0, basically LOW when the tcnt0 is below OCR0x and HIGH when it is above OCR0x. So the duty cycle for inverting mode is:  
+( (256 - OCR0x value) / 256) * 100 
+
+
+In fast PWM mode, the frequency of the produced signal will be: Clock_frequency / (N * 256), where N is the prescaler.  
+
+
+
+Explanation of the code: 
+
+1)The first section of the code is macros definition of the addresses of the registers, which reduces redundancy across the whole program and makes our life easier and makes the code mode hygienic. 
+
+2) The WGM02:00 bits are set to 0-1-1, since I want to use the mode 3, where the timer is in FAST PWM mode with the top as 0xFF and the bottom is 0x00. 
+
+3) I also ensure the timer is enabled by clearing the PRTIM0 bit in the PRR register. 
+
+This step is not really required since arduino already handles it for us, but this is a good practice to have. 
+
+4) The CS02:00 bits are set to 0-1-1, for selecting the 64 prescaler. 
+
+5) The COM0A1:0 bits are set to 10( binary), to set the compare output pin to non inverting mode. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+bug log:
+1) swapped the addresses of the PORTD and DDRD pins
+2) I mistakenly set the 7th bit of DDRD to output, and not the 6th bit, basically it was a off by one error produced by the fact that bits are 0 indedxed and i was in a rush when setting the pin up. 
+
+3) Why is there a faint glow when im writing 0 to the function? when i write 10 there is a faint glow compared to 0, which is obvious.
+
+This code run goes to show that there is a difference between theoretical duty cycle wave generation and real world perceived brightness.
+
+
+The reason why there is a faint glow at 0 is because, the OCR0A is set to 0,and when the tcnt0 wraps around to 0, a rising edge is triggered but then output compare occurs and a rising edge is triggered as well, this causes to generate a signal with a duty cycle of a very short time, resulting in a very dim illumination of the led when the function's value is passed to be 0. 
+ 
+
+4) In my code, I wrote one line which i was not supposed to write, considering i wanted to use the mode7, which was clearing the WGM02 bit, and when i was working with the CS bits, i mistakenly cleared WGM02 bit when I was supposed to clear the CS02 (to select the 64 prescaler), this mistake made my code set the timer0 module go into mode3 for Wave generation , I didn't notice this at first, since my code was working with the intended results I wanted but my framework of using the mode 7 was wrong in the first place.  
+
+
+This was one of the biggest coincidences, as clearing the WGM02 bit makes the timer go into mode 3 of wave generation, which was the mode I needed to be in. And since the Arduino resets the registers, CS02 was already set to 0, which made the prescaler to be 64, and set the wave generation mode as  mode 3. 
+
+And this bug wasn't even detected when I first executed the code, everything was working as intended. 
+
+
+
+5) i thought I needed the mode7 of the wave generation modes for my use case of making the LED fade/ seeing it at different levels of brightness. 
+
+The problem with mode 7 for my use case is that, when the tcnt0 reaches ocr0a, 2 things happen, which are as follows: 
+
+A) The falling edge is triggered, 
+B) The tcnt0 is wrapped back 0, since OCR0A is the top. 
+
+These both happen in the same cycle, so there is effectively no "low" cycle of the signal which is generated. This results in a signal with almost 100% duty cycle, which is what I observed when I did the mistake of setting the WGM02 bits. 
