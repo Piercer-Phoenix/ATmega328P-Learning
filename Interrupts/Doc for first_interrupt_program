@@ -1,0 +1,114 @@
+
+
+A vague, (and maybe imperfect) model for what interrupts are: 
+
+Interrupts, basically are "pings" (as I like to call it), or "signals" sent to the processor when an event occurs. There are 26 such events which could raise an interrupt in the ATmega328P. 
+
+Interrupts are a mechanism one can use to save CPU cycles by not busy-waiting/polling an event and just handle the event when it occurs. The event raises a flag which can be either configured to raise an interrupt, or not. 
+
+This is the case with the timer interrupts which occur when a flag's corresponding bit in the corresponding registers are set, then the occurrence of the event raises a flag. 
+
+
+For the ATmega328P, the IVT lives at 0x00 in flash memory, and each vector in the IVT is  simple jmp instruction to the label where the interrupt handler label is stored. Note that only the label of the handler lives in the code, and not the actual handler code. 
+
+When an interrupt is raised, the CPU checks the IVT, jumps to the label where we defined that specific interrupt's handler, and executes the code, and comes back to executing the main code it was executing before jumping to execute the interrupts. 
+
+
+So the flow for handling an interrupt, when it occurs is, 
+
+Flag -> interrupt -> jmp to handler -> execute the ISR code, jump back to main function code. 
+
+
+(One thing to note before moving to the next part is that the MCU never jumps to process the interrupt mid instruction. An interrupt is serviced only after the current instruction is complete.)
+
+The MCU stores the state it was in, the flags and the pointer to the next instruction it has to process, 
+and then it jumps to the label of the interrupt that it got, that is 0x00 + 2*n 
+( n being the vector number of the interrupt which is being processed). and then it checks the label for the handler 
+and goes there, and executes the Handler and comes back, if there are no pending interrupt, it goes back to executing the 
+instructions in the main function. 
+
+Interrupt have a priority, and based on the priority of an interrupt, it is processed. 
+If there are multiple pending interrupts which are to be serviced, the ones with the lower vector number have the 
+higher priority. 
+
+
+NOTE: the address of the interrupt in the IVT is counted in words, not bytes. A word is 2 bytes long, 
+so each entry in the IVT for the ATmega328P has a 4 byte length. 
+
+
+
+
+
+An interrupt only fires when the global interrupts enable bit is set. 
+The global interrupt enable bit controls if any interrupt fires at all, 
+regardless of the priority of the said interrupt. 
+
+For an individual interrupt to fire, 3 conditions have to be met, if not, the interrupt does not fire,  
+which are as follows:
+
+1) The flag has to be set
+2) The interrupt enable bit for the flag has to be set (this is for timer interrupts, mainly)
+3) Global interrupts have to be enabled.
+
+
+The MCU automatically stores it's current state into the SREG register and saves the program counter and the SREG register is pushed onto the stack, the reason why it saves the current flags is because the ISR may use the flags and "clobber them", (clobber is just when one process overwrites/changes the data saved in a register by other processes), the hardware automatically also disables global interrupts when one interrupt handler is being serviced, so that there is no chaos and incomplete execution of the ISRs. 
+
+the sei() sets the global interrupt enable bit and the cli() clears it, meaning it disables the global interrupt bit.  
+
+
+The reti instruction is executed once the MCU comes back to the main code, which reads back the previous states and 
+enables the global interrupts again. 
+
+
+
+
+
+
+code explaination:  
+
+The top section is for defining macros which i would be using in the code, 
+
+the second section is two lines, just declaring 2 variable globally, the last_time which will hold the 
+last recorded time and a current_time variable which keeps track of the number of times the timer2 compare match A 
+interrupt fires. 
+
+The main loop is just checking how much time has passed between last time and current time and flipping 
+the PB0(which maps to digital pin 8 on the Arduino UNO) bit using an XOR operation. 
+
+
+The ISR is just simply incrementing the current_time variable for recording the number of times the compare match a 
+for timer2 fires. 
+
+For each fire, it means 4 microseconds have passed. So, when the difference between current_time and last_time is 250,
+the PB0 bit is flipped. 
+
+The code checks for 250 difference between the two variables because, for each increment to the tcnt2 register, 
+it takes 16 microseconds, and since the value of ocr2a is 250, each interrupt fire means 4 ms have passed. 4ms * 250 = 1s. 
+so for each 250 difference between current and last times , the PB0 bit is flipped. 
+
+
+
+
+
+
+
+
+
+
+bug log: 
+
+1)Wrote a wrong thing when i was defining the ISR. I wrote TIMER2_COMPA when i was supposed to do TIMER2_COMPA_vect, and i did a mistake again when writing _vect, i made it all caps. 
+
+2) I made a mistake of manually writing cli() at the beginning of the ISR sei() at the end of the ISR. which is not required, since this is already hardware enforced, and is just redundant.  
+
+3) For the main loop, while checking the last_time and the current time, you needn't worry about a race condition occurring 
+as each increment of the variable occurs every 4 milliseconds and it is enough time for not causing a software race conditions
+where the variable might be incrementing too fast for software comparison(which, no matter how fast the language is, 
+takes some time, which introduces room for error). 
+
+
+BUT, one thing that might happen is that when the processor is reading the 4 bit "current_time" variable, which takes 4 instructions, 
+a torn read event can occur, as a interrupt can occur between the read , and when the MCU comes back to reading the variable, 
+it will get a wrong value, so we can surround that piece of code with sei() and cli() for the sake of safety and hygiene. 
+
+4) I made a mistake while register writing to tccr2a for setting the wgm20 bit but i set the cs20 bit in the tccr2b register. 
