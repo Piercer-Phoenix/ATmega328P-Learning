@@ -60,12 +60,10 @@ void setup() {
 }
 
 void loop() {
-  cli();
   if( (current_time - last_time) == 250){
   portb ^= (1 << 0);
   last_time =current_time;
   }
-  sei();
 }
 
 
