@@ -83,7 +83,7 @@ For each fire, it means 4 microseconds have passed. So, when the difference betw
 the PB0 bit is flipped. 
 
 The code checks for 250 difference between the two variables because, for each increment to the tcnt2 register, 
-it takes 16 microseconds, and since the value of ocr2a is 250, each interrupt fire means 4 ms have passed. 4ms * 250 = 1s. 
+it takes 16 microseconds, and since the value of ocr2a is 250, each interrupt fire means 4 milliseconds have passed. 4ms * 250 = 1s. 
 so for each 250 difference between current and last times , the PB0 bit is flipped. 
 
 
