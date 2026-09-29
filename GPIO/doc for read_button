@@ -1,0 +1,146 @@
+doc for GPIO:
+
+
+*) A basic rundown on what GPIO is:
+
+
+-> GPIO isn't really a "peripheral" per se, it is more of a mode of configuration for port pins. The Atmega328P is equipped with 23 pins which can operate as I/O ports.
+
+-> GPIO is a mode of configuration where the pins are used to communicate with external peripherals, these 23 pins' configuration and behavior as a general digital I/O pin is configured using a set of 3 registers, per 8 pins which form a PORT. (with one exception, which is of the PORTc, PINc, and the DDRc registers)
+
+-> The port pins on the Atmega328P, which are 23 in number, can be used as general digital I/O, that is, as pins to drive external peripherals or communicate with external peripherals. But certain pins have alternate functions as pins for other peripherals like an oscillator. 
+
+PB6 and PB7 (PORTB 6th bit and 7th bit, we'll talk about this in detail later), can be used as GPIO but also as crystal setup , where you can configure the behavior of these pins using fuse bits in the bootloader. 
+
+
+
+NOTE: Arduino UNO sets the fuse bits for us, and takes care of the bootloader, for now, i am not going to touch those topics and deep dive since i would like to keep the scope limited and not complicate stuff for myself. 
+
+
+
+-> Each port pin has zero or more alternate functions and each pin's alternate function is mentioned properly in the I/O ports section of the Atmega328P datasheet, and also the individual sections of each peripheral which uses one of those pins. 
+
+When a pin is said to use a port pin for an alternate function, the peripheral driving it has to set bits in certain registers. Like if you wish to generate a PWM signal on a pin, you have to search up timers, and let's say i deceided to use the timer0 module, and I wish to drive a PWM signal on the OC0A pin, i have to set the corresponding bit of the pin as output in the DDR register(which, in this case is DDRD's 6th bit, as OC0A maps to PD6 pin). 
+
+
+-> A port pin is generally controlled by 3 sets of registers, for each PORT(which is a collection of 8 port pins, with one exception which is the PORTC, PINC and DDRC, since there is no 8th bit for portc, and the other registers for this port.), which are as follows:
+
+
+1) DDRx  - Data Direction Register, 
+2) PORTx - Data register, 
+3) PINx  - Pin register, 
+
+
+-> A) DDR: The data direction register is a register which controls whether the pin is output or input. 
+   B) PORT : This is the data register, which writes the data to that specific pin and it's value selects the different modes the MCU provides when the pin is configured to be input. 
+
+You can either make the PORTxn bit as 0 when DDRxn bit is 0, which makes the pin "float" , which means it is disconnected from the VCC and the ground. It's  value is garbage and only dependent on the environment. 
+
+Or, you can write PORTxn bit as 1 when the DDRxn bit is 0(input), which activates the internal pull up resistor(refer to the terminology section for explaination). 
+
+
+   C)PIN : This is the pin for reading the output voltage at Pxn pin. Writing a 1 to the PINxn bit will toggle the PORTxn bit which helps reduces the number of instructions for a read-modify-write which is what is normally used to toggle a PORTxn bit. 
+
+(please refer to the terminology section if you are not able to follow up with the notations and some general facts from the datasheet.)
+
+
+
+
+
+*) Terminology:
+
+1) The 'x' which succeeds a register name or a pin notation (Pxn, for  example), is a short hand and general notation to say "this notation can refer to either 'B', 'C', 'D' ". 
+
+The 'n' which usually succeeds a 'x' notation, is a type of notation used for denoting the individual bit number of a pin or a register. 
+
+For example: DDRxn is a general/shorthand way of referring to any bit of the 3 DDR register present in the ATmega328p. 
+
+
+
+2)Peripherals: Peripheral is a device with which a MCU talks to. And to tighten up the ambiguities, MCU here, refers to the CPU, the part of the MCU which computes. Anything except that, which does ONE job and communicates with something else and the MCU, is a peripheral. 
+
+
+There are internal and external peripherals. The timers, ADC(Analog to Digital Converter), etc,. are internal peripherals, since they live inside the MCU chip. 
+
+External Peripherals are devices which live outside the MCU chip, like an LED, a push button, a temprature sensor and etc. 
+
+
+3) PORT: A port is a collection of I/O pins which share a similar set of port registers(DDRx, PORTx, and PINx), each  port spans 8 I/O pins, with the exception of the C port as it only has 7 pins which it controls. 
+
+
+
+4) Internal pull up resistor: A pull up resistor is a device which connects the pin ( or any device) to a VCC source weakly, which means , when the pin (or any device) is connected to ground, the pin is pulled down, which means it shows 0v (low). 
+
+The internal pull resistor helps set a "default" state, so when the PINxn bit for the Pxn pin shows 1 it means it is in its default form, and when the PINxn shows low (0), it means the button was pressed. 
+
+The default state refers to the value the pin outputs when there is no external source driving it, which in this case, with the internal pull up resistor enabled is the HIGH state/ 1. 
+
+PINxn showing 0 if a button is pressed when it is connected to Pxn means the button is "active - low", which means if the button is pressed, it drives the pin low, which means the button is a connector between a GND source and the pin. The PINxn bit only shows low when  button is pressed,  when the button is an active-low button. 
+
+
+
+
+
+*) Scope limitations: 
+
+1) What I said about fuse bits or bootloader might be wrong, and I'm fine with it as, at this point in time, I wish to limit my scope and not scope - creep my progress and slow down. 
+
+2) The code doesn't talk about debouncing, neither does the explaination, which will be the next part. 
+
+
+
+
+Summary for understanding what GPIO is:
+
+-> GPIO is a mode of operation for the 23 I/O pins , which are controlled by their respective port registers, and I/O pins have zero or more alternate functions which can be configured by setting/clearing values of the corresponding registers. A collection of these pins are called PORTS, and the ATmega328P has 3 ports which are labelled B, C and D, which have 8, 7 and 8 pins respectively. 
+
+
+-> Even when alternate functions are being used, in some cases, you might need to configure the port registers for the desirable peripheral operation. 
+
+-> An internal pull up resistor is used when reading digital signals, and a high impedance state effectively makes the pin "floats", when the pin is set to output, the value of the PORTxn bit determines if the pin is showing a digital high or digital low. 
+
+-> The PINx register's functionality is independent of the functionality of the DDRx and PORTx register, it is used only to read the voltage on the Pxn port pin. 
+
+Even if the MCU is the one driving the pin , that is, even if the MCU is the one sending voltage to Pxn bit, the PINxn bit shows what voltage is there. 
+
+When the Pxn port pin is set to output, we generally don't touch the PINx registers since we already know what voltage is present at the Pxn pin, but if the desired output is not seen, then we use the PINxn bit to check the voltage at the pin so we can determine if the issue is from the external components or from the pin itself. 
+
+
+
+
+
+
+
+
+
+code explaination; 
+1) Defining macros to write to registers across the program, simply. 
+
+2) In the setup() we set the PB0 pin as input by writing 0 to PB0 and write PORTB as 1 to activate the internal pull up resistor, 
+the code also sets up PB4 as output pin (for LED to glow when button is pressed). 
+
+3) The main() loop is just checking the PINB0 and checking if it is 0(which means button is pressed), and turning the LED on if the status is 0 and turning off if the status is 1(since we are using negation of status for loop condition). 
+
+4) there is also another part of the code which you can uncomment and execute which is toggling the pin if button is pressed. 
+
+I included this code too because just writing high to LED when button is pressed results in success but if you perform toggling, then you realize that one button press is not ust one clean "0 when pressed, 1 when released" but multiple signals, since the LED won't be neatly toggling. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bug log: 
+
+1) stupid bug really, i forgot to activate the internal pull up after defining PB0 as input. 
+2) i set pinb0 to 1, when i meant to write portb0 to 1 to activate the internal pull up. 
+3) i made a coding mistake when trying to check the status of PINb0. 
+4) This one is stupid too, when i wanted the LED to glow when i pressed the  button, and dumped by code, i wrote " portb &= ~(1<<0); " in my else statement for a if statement which checked the PINB0's status and turned the led on when the button was pressed. nto toggle, pressed. i was supposed to write "portb &= ~(1<<4);" not what i wrote, which made my LED glow regardless of the button status. because the portB0 pin was in tri state(high impedance) mode
