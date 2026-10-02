@@ -1,0 +1,65 @@
+doc for debounced button read 
+
+
+NOTE: This doc assumes you've already read the GPIO doc and understand DDRx, PORTx, PINx, active-low, and pull-ups. If not, read that first.
+
+
+
+*) A small note on what debouncing is and why it is needed:
+
+
+-> There are multiple buttons out there which can be designed as either active low(press = low(GND) )  and active high (press = VCC reading), the philosophy of active low and active high is different than what a "bounce" is. That is the first thing to understand. 
+
+-> The most commonly used buttons for learning embedded and general purpose are mechanical buttons, where they have 4 legs. Generally, those 4 legs are internally connected in pairs of 2, one pair is connected to GND and one is connected to the digital pin. These two pairs (and only ends, if the button is 2-legged) come into contact when pressed, through a mechanical touching between the 2 ends. 
+
+-> This touching of the 2 ends produces a "bounce", where the contacts touch and bounce off of each other multiple times before coming into a steady contact, giving a steady state. 
+
+-> The period where "bouncing" happens, there is a erratic fluctuation of the voltages read on the digital pins. Debouncing is a procedure of using different physical components or software techniques to overcome this erratic burst of false states. 
+
+NOTE: I won't be talking about physical countermeasures to bouncing of mechanical buttons, but only about software debouncing. 
+
+
+-> Software debouncing can be done using multiple ways, which are as follows:
+
+1) Blocking debouncing: This is where we simply wait for a bounce window (a bounce window is the amount of time a button's bounces bounce before settling into a proper state), after a change in the pin state is seen. The problem with this method of debouncing is that it is "blocking" meaning it blocks all other processes (even for 10ms, which might seem trivial to us but it is a LOT of cycles, almost 160k cycles wasted. and other processes and code is blocked. 
+
+2) Non blocking, interrupt driven debouncing : This is what I have implemented, this is a version where you have a timer firing every x milliseconds(usually 1ms), and the ISR for that interrupt is tracking the flags of the buttons in the system. 
+
+The ISR consists of different stages, which are: reading the pin voltages, comparing with the previous state, and incrementing the counters or restting the counters, and the stable state flag to 1, and setting the button_press flag if all conditions for the press are met, which are change in the voltage, tracking the counter and the states across multiple calls, and the stability of the current state. 
+
+
+
+
+
+*) Code explaination:
+
+
+-> The code uses the timer0 module, configuring the prescaler to 64, and configuring the ocr0a value to 250, so that a flag is raised every 1 millisecond. And setting the OCIE0A bit, to enable interrupt for the OCF0A flag. 
+
+-> The ISR for that interrupt reads the current state of the pin, and compares it with the previous state and updates the count, if the count is 10(which is the bounce window for most mechanical buttons), the ISR checks the last stable state, and the current state, and only sets the button_pressed flag(a global variable, accessed by both ISR and main() ), the current state has to be 0(which means it is 0) and the last stable state has to be 1, because I only intend to toggle the LED on BUTTON PRESS, not on release too. 
+
+
+
+
+
+
+
+*) bug log:
+
+1)wrote static for variable which stores the state of the Pxn pin.
+
+Basically, using static for the variable which reads the current pin voltage is a mistake as static variable are declared once and do not update values during the entirety of the code's execution. It's not exactly "does not update values" but "static" allows to let the values of a variable persist across multiple calls, which is exactly what we need when we are writing an ISR of this manner. 
+
+The curr_state shouldn't be static as static variables cannot be re-read. 
+
+2) the code originally couldn't tell the difference between a press and release event, sicne my desired functionality was to toggle on PRESS, i have to reconfigure the code to only listen to an event when it is a press, which in case of a button which is designed active low, the toggle of the led has to only happen when the last stable state was 1 and the current state is 0. 
+
+A mistake I did while implementing this, 
+
+I just surrounded the core logic, where i set the flag which the main loop will read and toggle the LED accordingly, with a if condition where it checks the last stable state is 1 and the current state is 0. 
+
+The problem with the fix is that it just toggles ONCE, and the inner if block is not accessible, which means the last_stable_state is never updated again, making the button_read flag always be 0 after the first toggle. 
+
+the fix: just reset the last_stable_state when there is a state change between current state and last_state. 
+
+This fix is fine but the issue which might arise is that the last_stable_state follows the raw pin reading, and not the debounced pin reading. if there are issues, this might be the place to look out for. 
