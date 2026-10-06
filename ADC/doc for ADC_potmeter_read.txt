@@ -1,0 +1,154 @@
+doc for ADC 
+
+
+
+
+What the code does: The code reads analog voltage from the potmeter on the breadboard, which is connected to A0, and then using the potmeter to control the brightness of an LED, using the timer0 module and generating a PWM signal to control the LED on OC0A pin.
+
+
+
+
+
+
+*) A little context on what ADC is, (please skip to the code explanation section if you dont need to read this):
+
+
+-> The ADC is abbreviated to Analog-to-Digital Converter. It is a peripheral in the ATmega328P which reads the analog voltage inputs from the analog pins (PORT C pins, but used for this peripheral), and converts it into a digital value. The digital value for a voltage is determined by the resolution of the ADC, which foor the Atmega328P is a 10 bit resolution, and on the reference voltage. 
+
+-> An ADC has multiple input channels and it chooses one signal among those, and selects a clock prescaler for using it as a ADC clock signal (we'll discuss what this is, in detail, later in this document), and it is given a reference voltage and the conversion begins. 
+
+The basic function of a ADC is just that, to convert an analog signal into a digital value. The ATmega328P uses a successive approximation with a resolution of 10-bits, this document won't be talking about how successive approximation works, exactly, but will be talking about the details of ADC on the ATmega328P in moderate depth.  
+
+
+The ADC begins function by selecting an input, then, the ADC is given a reference voltage, which sets the highest range the value of the signal can go to. 
+
+Since we are using the Arduino UNO board and it is having a VCC of 5v, the reference voltage will be 5v(worth noting is that even with any amount of voltage regulators, you cannot hve a stable, precise 5v signal).
+
+
+The ADC takes the reference voltage, which is treated as the highest amount of the voltage the analog input goes till, and the ADC clock signal frequency which times the conversions in the ADC and the output is a binary number,  the peripheral stores the output into registers, but wait, the ATmega328P has a 8-bit data bus, how will it read a 10 bit resolution output value? 
+
+The answer is that it is stored in 2 registers, ADCH and ADCL. The lower 8 bits are in the ADCL and the higher 2 bits are in the ADCH. 
+
+
+For proper understanding and unambiguous communication, let's assume the ADC outputted a binary number with 10 bits, think of them as ADC1, ADC2, ADC3.....ADC9. The ADC1 is the least significant bit, and the ADC9 is the highest significant bit. 
+
+In right-shifted output mode: 
+-> The ADCH register stores the ADC9 and ADC8 bits. The ADCL register stores the ADC7 to ADC0 bits. 
+
+In left-shifted mode:
+-> The ADCH register stores the ADC9: ADC2 bits. The ADCL register stores the ADC1 and ADC0 bits. 
+
+
+-> One thing to look out for, when reading the output for the ADC peripheral, is to read the ADCL first and then the ADCH register because, reading the ADCL register triggers a lock on the ADCH's value and the lock is only released after the ADCH is read. 
+
+The lock mechanism exists because if a completion event were to happen when reading the output, we would get an inaccurate reading. 
+
+So that is why, thanks to the lock mechanism, reading the ADCL register first, rather than the ADCH register is a common practice, if not, the proper way to read the output values. 
+
+-> The formulae for the output , which is read from the ADCH/ADCL registers, after a conversion, if interpreted in decimal form is as following:
+
+Output = ( V(in) / V(ref) ) * 1024
+
+V(in) is the input voltage from any of the 8 input channels, V(ref) is reference voltage, which determines the top of the range. And the ratio is multiplied by 1024 because that is all of the values which are possible, due to the resolution of the ADC. 
+
+
+The ADC runs in either auto-trigger mode or single conversion mode. Single conversion mode is just when the bit called ADSC (AD start conversion)  in the ADSCRA register. This bit stays high till a conversion is taking place, and once the conversion ends, and the output is ready, the ADIF is set, and the ADSC bit is cleared. 
+
+If the ADIE is set, the interrupts for the ADIF bit are enabled. This code will be using the free running mode, as the potmeter is to be read continuously. 
+
+
+In free running mode, once a conversion finishes, the next conversion begins almost immediately, and the values in ADC output registers are  updated continuously, after each conversion. For this mode, the first conversion has to be started using the ADSC bit but the next conversions go on, independent of the fact if the interrupt bit has been cleared or not. 
+
+
+
+
+
+*) Summary: 
+
+The ADC peripheral for the ATmega328P is a 10-bit resolution Analog to Digital Convertor which uses successive approximation. It has 8 analog input channels, 6 of which are PORT C pins and 2 are dedicated analog input pins.
+
+
+The ADC takes 3 things as an input for one conversion: 
+
+1) A reference voltage which is considered the top of the range, of the voltages which the ADC will be taking. 
+2) An ADC clock source setting which is derived from the master clock itself, and by using the ADC prescaler settings. Usually, for a 10-bit precision(where you want all 10 bits to be precise and have proper values) the ADC clock source has to be configured to something with a frequency in the range of 50KHz and 200KHz. 
+3) An analog voltage input, from the 8 analog input channels. This one is kind of self explanatory. 
+
+
+
+
+
+
+
+*) Terminology:
+
+1) Reference voltage: A reference voltage which is considered the top of the range, of the voltages which the ADC will be taking and converting into a digital value. On the ATmega328P, you can either select the VCC as the reference voltage, an internal 1.1V voltage as a reference or the external voltage on AREF pin as a reference voltage. 
+
+
+NOTE: If input voltage is higher than Reference voltage, the value just sits at 1023, the ATmega328P doesn't have any special behaviours to handle the case where input is greater than the reference voltage. 
+ 
+
+2) Resolution: The range of numbers in which the converted decimal values lie. A 12-bit ADC device will have a 4096 "steps"/ "values", and the voltage value of each step is decided by the reference voltage. 
+
+The resolution is basically how many steps can the ADC device divide the 0 to V(ref) range into. The ATmega328P has a 10-bit ADC.
+
+
+3) Precision: The amount of bits which are accurate. If you wish to read only an 8-bit precision result, you can jut read the first 2 bits. Precision measures how many of the bits in the output are correct and not garbage/wrong values caused by either, the clock running too fast, or noisy inputs or references. 
+
+Since increasing the ADC clock frequency changes the accuracy of the ADC peripheral, for a 10-bit precision, the ADC clock source is to be kept between 50KHz and 200KHz. 
+
+
+4) Sampling rate: The amount of conversions which can be completed in one second, this is dependent on the ADC clock, as one conversion takes 13 cycles (and the first conversion takes 25 cycles. ) A very subtle yet important thing to note is that, we are talking about ADC clock's cycles, not the master clock, but the ADC's. 
+
+
+
+5) Accuracy: How close the reading is, to the real value(input value). When using the formula , result = (V(in) / V(ref) ) * 1024. if the reading shows a 1.6v and the input voltage was 1.5v there is an error of 0.1v. Accuracy measures how close the measure quantity is, to the real input voltage. 
+
+
+
+LSB: TO-DO.
+
+
+
+
+Code Explanation: 
+
+-> The code is a kind of step up from the previous codes I've written, as it seperates the code which is one time execution with the code which need be executed multiple times, for the sake of optimization as calling setup code multiple times will lead to  wasted cycles. 
+
+->The code mainly sets up the timer for FAST PWM generation on the OC0A pin, that is, the PD6 pin, which maps to the digital pin 6 on the Arduino UNO. 
+
+->The code also sets up the ADC peripheral into auto trigger mode with the auto trigger mode being the free running ADC mode, in this mode, the values are continuously read from the selected analog input channel. 
+
+
+->The code mainly does 5 things with the ADC peripheral, which are as follows:
+
+1) Select a prescaler to divide the system clock and set the ADC's clock source. prescaler = 128. 
+2) Select an analog input channel. A0
+3) Select a reference voltage. AVcc
+4) The ADIF bit is enabled to enable interrupts for the AD conversion complete flag. 
+5) Enable the free running mode and initiate the first conversion, after which, all conversions happen on their own.
+
+-> The ISR reads the ADCL and ADCH and stores the value into the pot_read global variable which is used to calculate the scaled value, between the ranges 0-255, since pot_read's range is 0-1023, using the line: 
+
+"uint32_t scaled_value = ((uint32_t)pot_read * 255) / 1024;"
+
+
+
+
+
+
+
+*) Bug Log: 
+
+1) the first rcorded value is only read when running the code, even though the code is supposed to se tthe ADC in free running mode. 
+
+reason: i forgot/ didn't know I had to enable the auto trigger bit in the ADCSRA register.
+
+2) The led was peaking and falling multiple times during one rotation of the potmeter across its  one single slide, the reason was the scaling logic where there are limits for the multiplication operation of 16 bit and for highervalues it tended to wrap around. 
+
+this was the line: uint32_t scaled_value = (pot_read * 255) / 1024;
+
+
+here, pot_read * 255 exceeded the 16 bit integer limit for the AVR and unpredictable behavior occurred. 
+
+Fix: Cast the multiplied result to 32 bits explicitly. like this: uint32_t scaled_value = ((uint32_t)pot_read * 255) / 1024;
