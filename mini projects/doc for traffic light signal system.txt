@@ -1,0 +1,52 @@
+doc for traffic light signal system state machine:
+
+Purpose of the project:
+
+-> To develop a code which maintains a non blocking state-machine which debounces a mechanical button and also maintains a tick counter(used for non-blocking state-machine design), for a traffic management system and a pedestrian interrupt. 
+
+
+Explanation of the code in deep:
+
+-> The code is an interrupt driven state management system which uses the TIMER0_COMPA interrupt vector which pulses every 1ms, increments a tick counter(which is used for non blocking time checking). 
+
+-> There is a timer0_setup() functon which sets up the timer0 in ctc mode with chose prescaler settings and the WGM mode for CTC which is 3rd mode. 0-1-1. 
+-> The timer0_setup() function is called in the void setup() function, along with data direction setup of the 4 leds and the 1 button. 
+-> The ISR for the TIMER0_COMPA_vect debounces the button and increments the tick counter. The b_press flag is set if there is a PRESS event detected. 
+
+-> The main loop consumes the b_press flag during transitions and sets the stage, and consumes it. 
+If b_press is not set, the stage is set to the next state, that is, state 3 is transitioned to state 1, sequentially. 
+
+
+summary of peripherals/concepts used in this code:
+
+
+1) Interrupts: They are events which happen when something is executed or an event occurs. 
+-> Interrupts are special pings sent to the processor when there is an event occurred. The processor completes the current instruction's executon, checks if there is a pending interrupt and completes them, in case of multiple interrupts, the one with the highest priority/least numbering gets solved first. 
+
+-> Each interrupt has a Interrupt Service Routine(which is basically the code which is executed when the interrupt is raised). 
+
+2) Timer: A register which ticks up every clock (prescaled) pulse. 
+
+-> It can be operated in many modes, like CTC or PWM. In this example, we will be using the CTC mode which sets a flag on the event that the timer reaches a set limit. 
+
+-> The timer peripherals can be used to generate many different sorts of interrupts. Like the ocf0a's interrupt TIMER0_COMPA. 
+
+3) GPIO: The general input/output interface using which we communicate to the external components. 
+
+-> This examples sets the DDRB register's corresponding concerned bits and then sets the pin as input or output. 
+
+-> The code also activates the internal pull up resistor for reading input from button. 
+
+4) Debouncing: Debouncing isn't really a peripheral per-se. 
+
+-> The issue arises from mechanical buttons where the contacts touch and bounce and then touch again and this happens quite a few times before the signal settles. 
+-> In that period, reading the signal before it settles, is a bad idea as there is no accurate stable reading from that pin's readings. So we use debouncing, in this case, we make a debouncing statemachine. 
+-> The debounce state machine tracks the raw pin reading, counts how long it has been stable, and sets the press flag only when the pin has been stable for 10 consecutive ISR ticks.
+
+
+
+bug log: 
+
+-> I did a mistake in the transition definition of the system when it is in state 3(red light), where i was supposed to write "last = now" but i wrote "now =  last" which made the system hang up in the state forever after it touches the state 3 once in it's execution. 
+
+Fix: change the statement to last = now.
