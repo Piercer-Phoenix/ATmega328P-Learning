@@ -1,0 +1,71 @@
+doc for pwmfade-tickcounter:
+
+
+
+Summary of the peripherals/concepts used in this code:
+1) Interrupts: They are events which happen when something is executed or an event occurs. 
+-> Interrupts are special pings sent to the processor when there is an event occurred. The processor completes the current instruction's executon, checks if there is a pending interrupt and completes them, in case of multiple interrupts, the one with the highest priority/least numbering gets solved first. 
+
+->  Each interrupt has a Interrupt Service Routine(which is basically the code which is executed when the interrupt is raised). 
+
+Interrupts, in this code are used in 2 places 
+
+2) PWM: A trick to vary the "effective voltage" to a component. It is a trick because it doesn't produce a true analog voltage. 
+
+-> It is a mode of operation for timers where the mode is configured by the WGM bits. There are 2 types of PWM: Fast PWM and phase correct PWM. And each one has inverting and non inverting modes. 
+
+-> PWM is manipulating the time of a period in which the "high" part of the digital signal, stays high. The time for which the high part of the square wave signal stays high is called the duty cycle of the signal. And PWM generates a signal on the basis of the choice of the programmer.
+
+
+
+3) Timers: A register which ticks up every clock (prescaled) pulse. 
+
+-> It can be operated in many modes, like CTC or PWM. In this example, we will be using the CTC mode which sets a flag on the event that the timer reaches a set limit. 
+
+-> The timer peripherals can be used to generate many different sorts of interrupts. Like the ocf0a's interrupt TIMER0_COMPA. 
+
+
+
+4) GPIO: Used in this code for declaring the pin as output. This code configures the DDRD register, specifically the 5 and 6 pins which we will be using, which support PWM operation. 
+
+
+
+
+Explanation of the code:
+
+-> This code uses a tick counter which measures a 1ms using timer2 and sets up an ISR for TIMER2_COMPA which increments a global 32bit variable everytime it is fired, which effectively means it stores the number of milliseconds. 
+
+-> There is a function called millis_s() which returns the millisecond count when called, in a 32 bit integer format. 
+
+-> Timer0 was configured into fast PWM mode, specifically mode 3 according to the datasheet, where the top is 0xFF. And configured into non inverting mode of operation. 
+
+-> There is a timer0_pwm() function which sets the ocr0a and ocr0b (lazy design). 
+
+-> Since this is a non blocking system, the main loop checks for how much time has passed since the last time and if it equals 2000 or more, the control bit variable is flipped by a xor operation, and a count variable is reset and the last is updated. 
+
+-> The count variable is a 8 bit integer which acts as an input to the calling the PWM write function in the main loop. The count is incremented every 60 milliseconds by utilizing another set of "last" and "now" 8- bit variable. And then, if 60 milliseconds pass, control is incremented by 10 and last_strobe(the last state variable name I use for this set of functionality).
+
+-> The consumer of control flag sets the COM bits for selecting the current channel and calls the timer0_pwm() function with the count. using the statement "timer0_pwm(count)" Where count was updated before the control definition if-else. 
+
+-> The code uses a 8 bit integer to write to call the pwm function because it wraps around and the output we get is a sawtooth wave, it was written like that on purpose, and it was not a poor choice or a bug.
+
+-> The main point of the architecture of the main loop is there are 2 individual time maintainances. One for the fading-up and the sawtooth signals generation, and one which swaps which LED glows every 2s. 
+
+
+
+
+bug log:
+1) I assumed the brightness of the LED on port 0C0B can be controlled by setting the ocr0a itself but that is not the case. 
+
+The signal generation on the 0c0b pin is controlled by the ocr0b tegister. 
+
+
+2) Made a mistake by setting a wrong prescaler for the timer2(which handles the tick counter), and consequently, the time of switching the leds changes.
+
+3) Since the processing speed is a lot, making non blocking fading is hard since there is afade, but in real time it looks more like a blinking or a LED which is tweaking out, so there has to be a small delay everytime there is an increment in the intensity of the PWM signal to the led. 
+
+
+4) I made a silly mistake of writing a statement like this "count =+ 10" which isn't correct, the correct statement is: "Count += 10"
+
+
+5) Another mistake was to try to employ the fading mechanism during when i change the COM bits on the basis of the "control" flag. It is better to maintain another set of "now" and "last" flags which teack the ticks and increase count ( variable which is is used as an input to the pwm function), by 10. for a smooth increase in brightness. 
